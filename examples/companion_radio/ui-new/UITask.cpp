@@ -88,6 +88,7 @@ class HomeScreen : public UIScreen {
 #if UI_SENSORS_PAGE == 1
     SENSORS,
 #endif
+    MESSAGES,
     SHUTDOWN,
     Count    // keep as last
   };
@@ -281,6 +282,18 @@ public:
       display.setColor(DisplayDriver::GREEN);
       display.drawXbm((display.width() - 32) / 2, 18, advert_icon, 32, 32);
       display.drawTextCentered(display.width() / 2, 64 - 11, "advert: " PRESS_LABEL);
+    } else if (_page == HomePage::MESSAGES) {
+      display.setTextSize(2);
+      display.setColor(DisplayDriver::YELLOW);
+      display.drawTextCentered(display.width() / 2, 20, "Messages");
+      display.setTextSize(1);
+      display.setColor(DisplayDriver::LIGHT);
+      sprintf(tmp, "%d unread", _task->getMsgCount());
+      display.drawTextCentered(display.width() / 2, 38, tmp);
+      if (_task->getMsgCount() > 0) {
+        display.setColor(DisplayDriver::GREEN);
+        display.drawTextCentered(display.width() / 2, 53, "open: " PRESS_LABEL);
+      }
 #if ENV_INCLUDE_GPS == 1
     } else if (_page == HomePage::GPS) {
       LocationProvider* nmea = sensors.getLocationProvider();
@@ -431,6 +444,12 @@ public:
         _task->showAlert("Advert sent!", 1000);
       } else {
         _task->showAlert("Advert failed..", 1000);
+      }
+      return true;
+    }
+    if (c == KEY_ENTER && _page == HomePage::MESSAGES) {
+      if (_task->getMsgCount() > 0) {
+        _task->gotoMsgPreview();
       }
       return true;
     }

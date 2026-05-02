@@ -49,10 +49,34 @@ public:
       unsigned char c = (unsigned char)src[i];
       if (c >= 32 && c <= 126) {
         dest[j++] = c;  // ASCII printable
+      } else if (c >= 0xC2 && c <= 0xDF && src[i+1]) {
+        // 2-byte UTF-8: decode codepoint and transliterate known diacritics
+        uint16_t cp = ((c & 0x1F) << 6) | ((unsigned char)src[++i] & 0x3F);
+        switch (cp) {
+          case 0x0104: dest[j++] = 'A'; break; // Ą
+          case 0x0105: dest[j++] = 'a'; break; // ą
+          case 0x0106: dest[j++] = 'C'; break; // Ć
+          case 0x0107: dest[j++] = 'c'; break; // ć
+          case 0x0118: dest[j++] = 'E'; break; // Ę
+          case 0x0119: dest[j++] = 'e'; break; // ę
+          case 0x0141: dest[j++] = 'L'; break; // Ł
+          case 0x0142: dest[j++] = 'l'; break; // ł
+          case 0x0143: dest[j++] = 'N'; break; // Ń
+          case 0x0144: dest[j++] = 'n'; break; // ń
+          case 0x00D3: dest[j++] = 'O'; break; // Ó
+          case 0x00F3: dest[j++] = 'o'; break; // ó
+          case 0x015A: dest[j++] = 'S'; break; // Ś
+          case 0x015B: dest[j++] = 's'; break; // ś
+          case 0x0179: dest[j++] = 'Z'; break; // Ź
+          case 0x017A: dest[j++] = 'z'; break; // ź
+          case 0x017B: dest[j++] = 'Z'; break; // Ż
+          case 0x017C: dest[j++] = 'z'; break; // ż
+          default:     dest[j++] = '\xDB'; break; // CP437 full block █
+        }
       } else if (c >= 0x80) {
-        dest[j++] = '\xDB';  // CP437 full block █
-        while (src[i+1] && (src[i+1] & 0xC0) == 0x80) 
-          i++;  // skip UTF-8 continuation bytes
+        dest[j++] = '\xDB';  // CP437 full block █ (3/4-byte UTF-8)
+        while (src[i+1] && ((unsigned char)src[i+1] & 0xC0) == 0x80)
+          i++;  // skip continuation bytes
       }
     }
     dest[j] = 0;

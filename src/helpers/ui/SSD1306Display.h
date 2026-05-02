@@ -19,15 +19,19 @@ class SSD1306Display : public DisplayDriver {
   Adafruit_SSD1306 display;
   bool _isOn;
   uint8_t _color;
+  int _textsize;
   RefCountedDigitalPin* _peripher_power;
 
   bool i2c_probe(TwoWire& wire, uint8_t addr);
+  static const uint8_t* findPolishGlyph(uint16_t cp);
+  void drawPolishChar(const uint8_t* bitmap);
 public:
-  SSD1306Display(RefCountedDigitalPin* peripher_power=NULL) : DisplayDriver(128, 64), 
+  SSD1306Display(RefCountedDigitalPin* peripher_power=NULL) : DisplayDriver(128, 64),
       display(128, 64, &Wire, PIN_OLED_RESET),
       _peripher_power(peripher_power)
   {
-    _isOn = false; 
+    _isOn = false;
+    _textsize = 1;
   }
   bool begin();
 
@@ -39,6 +43,7 @@ public:
   void setTextSize(int sz) override;
   void setColor(Color c) override;
   void setCursor(int x, int y) override;
+  void translateUTF8ToBlocks(char* dest, const char* src, size_t dest_size) override;
   void print(const char* str) override;
   void fillRect(int x, int y, int w, int h) override;
   void drawRect(int x, int y, int w, int h) override;
