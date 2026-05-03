@@ -739,6 +739,20 @@ void UITask::loop() {
   if (ev == BUTTON_EVENT_TRIPLE_CLICK) {
     c = handleTripleClick(KEY_SELECT);
   }
+#if defined(JOYSTICK_UP)
+  ev = joystick_up.check();
+  if (ev == BUTTON_EVENT_CLICK) {
+    c = checkDisplayOn(KEY_LEFT);
+  } else if (ev == BUTTON_EVENT_LONG_PRESS) {
+    c = handleLongPress(KEY_LEFT);
+  }
+  ev = joystick_down.check();
+  if (ev == BUTTON_EVENT_CLICK) {
+    c = checkDisplayOn(KEY_RIGHT);
+  } else if (ev == BUTTON_EVENT_LONG_PRESS) {
+    c = handleLongPress(KEY_RIGHT);
+  }
+#endif
 #elif defined(PIN_USER_BTN)
   int ev = user_btn.check();
   if (ev == BUTTON_EVENT_CLICK) {
