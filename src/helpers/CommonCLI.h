@@ -19,10 +19,6 @@
 #define LOOP_DETECT_MODERATE  2
 #define LOOP_DETECT_STRICT    3
 
-#define BLACKLIST_MODE_OFF        0
-#define BLACKLIST_MODE_DIRECT     1   // only the last hop in the path is checked
-#define BLACKLIST_MODE_INDIRECT   2   // every hop in the path is checked
-
 struct NodePrefs { // persisted to file
   float airtime_factor;
   char node_name[32];
@@ -65,7 +61,6 @@ struct NodePrefs { // persisted to file
   uint8_t rx_boosted_gain; // power settings
   uint8_t path_hash_mode;   // which path mode to use when sending
   uint8_t loop_detect;
-  uint8_t blacklist_mode;   // 0=OFF, 1=DIRECT (last hop only), 2=INDIRECT (anywhere in path)
 };
 
 class CommonCLICallbacks {

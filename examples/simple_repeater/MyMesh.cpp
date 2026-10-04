@@ -418,7 +418,7 @@ bool MyMesh::isBlacklisted(const mesh::Packet* packet) {
   uint8_t hash_count = packet->getPathHashCount();
   if (hash_count == 0) return false;  // no hops yet, nothing to check
 
-  if (_prefs.blacklist_mode == BLACKLIST_MODE_DIRECT) {
+  if (blacklist.getMode() == BLACKLIST_MODE_DIRECT) {
     // only the most recent hop (the one that just relayed this to us)
     const uint8_t* last_hop = packet->path + (hash_count - 1) * hash_size;
     return blacklist.matches(last_hop, hash_size);
@@ -468,8 +468,8 @@ bool MyMesh::allowPacketForward(const mesh::Packet *packet) {
       return false;
     }
   }
-  if (packet->isRouteFlood() && _prefs.blacklist_mode != BLACKLIST_MODE_OFF && isBlacklisted(packet)) {
-    MESH_DEBUG_PRINTLN("allowPacketForward: packet dropped, blacklisted repeater in path (mode=%d)", (int)_prefs.blacklist_mode);
+  if (packet->isRouteFlood() && blacklist.getMode() != BLACKLIST_MODE_OFF && isBlacklisted(packet)) {
+    MESH_DEBUG_PRINTLN("allowPacketForward: packet dropped, blacklisted repeater in path (mode=%d)", (int)blacklist.getMode());
     return false;
   }
   return true;
@@ -1327,6 +1327,27 @@ void MyMesh::handleCommand(uint32_t sender_timestamp, char *command, char *reply
   } else if (strcmp(command, "blacklist clear") == 0) {
     blacklist.clear();
     strcpy(reply, "OK");
+  } else if (strcmp(command, "blacklist mode") == 0) {
+    uint8_t mode = blacklist.getMode();
+    strcpy(reply, mode == BLACKLIST_MODE_OFF ? "off" : (mode == BLACKLIST_MODE_DIRECT ? "direct" : "indirect"));
+  } else if (memcmp(command, "blacklist mode ", 15) == 0) {
+    const char* arg = &command[15];
+    uint8_t mode;
+    if (strcmp(arg, "off") == 0) {
+      mode = BLACKLIST_MODE_OFF;
+    } else if (strcmp(arg, "direct") == 0) {
+      mode = BLACKLIST_MODE_DIRECT;
+    } else if (strcmp(arg, "indirect") == 0) {
+      mode = BLACKLIST_MODE_INDIRECT;
+    } else {
+      mode = 0xFF;
+    }
+    if (mode == 0xFF || !blacklist.setMode(mode)) {
+      strcpy(reply, "Err - must be: off, direct, or indirect");
+    } else {
+      blacklist.save(_fs);
+      strcpy(reply, "OK");
+    }
   } else{
     _cli.handleCommand(sender_timestamp, command, reply);  // common CLI commands
   }
