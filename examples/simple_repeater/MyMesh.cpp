@@ -1219,14 +1219,6 @@ void MyMesh::clearStats() {
   ((SimpleMeshTables *)getTables())->resetStats();
 }
 
-static bool isValidHexPrefix(const char* hex, int len) {
-  if (len != 2 && len != 4 && len != 6) return false;
-  for (int i = 0; i < len; i++) {
-    if (!mesh::Utils::isHexChar(hex[i])) return false;
-  }
-  return true;
-}
-
 void MyMesh::handleCommand(uint32_t sender_timestamp, char *command, char *reply) {
   if (region_load_active) {
     if (StrHelper::isBlank(command)) {  // empty/blank line, signal to terminate 'load' operation
@@ -1313,69 +1305,10 @@ void MyMesh::handleCommand(uint32_t sender_timestamp, char *command, char *reply
       sendNodeDiscoverReq();
       strcpy(reply, "OK - Discover sent");
     }
-  } else if (memcmp(command, "blacklist add ", 14) == 0) {
-    char* hex = &command[14];
-    int hex_len = strlen(hex);
-    uint8_t prefix[3];
-    if (!isValidHexPrefix(hex, hex_len) || !mesh::Utils::fromHex(prefix, hex_len / 2, hex)) {
-      strcpy(reply, "Err - prefix must be 2/4/6 hex chars (1-3 bytes)");
-    } else if (blacklist.add(prefix, hex_len / 2)) {
-      blacklist.save(_fs);
-      strcpy(reply, "OK");
-    } else {
-      strcpy(reply, "Err - blacklist full");
-    }
-  } else if (memcmp(command, "blacklist remove ", 17) == 0) {
-    char* hex = &command[17];
-    int hex_len = strlen(hex);
-    uint8_t prefix[3];
-    if (!isValidHexPrefix(hex, hex_len) || !mesh::Utils::fromHex(prefix, hex_len / 2, hex)) {
-      strcpy(reply, "Err - prefix must be 2/4/6 hex chars (1-3 bytes)");
-    } else if (blacklist.remove(prefix, hex_len / 2)) {
-      blacklist.save(_fs);
-      strcpy(reply, "OK");
-    } else {
-      strcpy(reply, "Err - not found");
-    }
-  } else if (strcmp(command, "blacklist list") == 0) {
-    char* dp = reply;
-    for (int i = 0; i < blacklist.getCount() && dp - reply < 134; i++) {
-      auto e = blacklist.getEntry(i);
-      if (i > 0) *dp++ = ' ';
-      char hex[8];
-      mesh::Utils::toHex(hex, e->prefix, e->len);
-      sprintf(dp, "%d:%s", (int)e->len, hex);
-      while (*dp) dp++;  // find end of string
-    }
-    if (dp == reply) {  // no entries, need non-empty response
-      strcpy(dp, "-none-");
-      dp += 6;
-    }
-    *dp = 0;
-  } else if (strcmp(command, "blacklist clear") == 0) {
-    blacklist.clear();
-    strcpy(reply, "OK");
-  } else if (strcmp(command, "blacklist mode") == 0) {
-    uint8_t mode = blacklist.getMode();
-    strcpy(reply, mode == BLACKLIST_MODE_OFF ? "off" : (mode == BLACKLIST_MODE_DIRECT ? "direct" : "indirect"));
-  } else if (memcmp(command, "blacklist mode ", 15) == 0) {
-    const char* arg = &command[15];
-    uint8_t mode;
-    if (strcmp(arg, "off") == 0) {
-      mode = BLACKLIST_MODE_OFF;
-    } else if (strcmp(arg, "direct") == 0) {
-      mode = BLACKLIST_MODE_DIRECT;
-    } else if (strcmp(arg, "indirect") == 0) {
-      mode = BLACKLIST_MODE_INDIRECT;
-    } else {
-      mode = 0xFF;
-    }
-    if (mode == 0xFF || !blacklist.setMode(mode)) {
-      strcpy(reply, "Err - must be: off, direct, or indirect");
-    } else {
-      blacklist.save(_fs);
-      strcpy(reply, "OK");
-    }
+  } else if (memcmp(command, "blacklist", 9) == 0 && (command[9] == 0 || command[9] == ' ')) {
+    const char* sub = command + 9;
+    while (*sub == ' ') sub++;
+    blacklist.handleCommand(sub, reply);
   } else{
     _cli.handleCommand(sender_timestamp, command, reply);  // common CLI commands
   }
