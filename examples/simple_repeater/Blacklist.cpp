@@ -15,6 +15,7 @@ static File openWrite(FILESYSTEM* _fs, const char* filename) {
 
 void Blacklist::load(FILESYSTEM* fs) {
   _fs = fs;
+  mode = BLACKLIST_MODE_OFF;
   num_entries = 0;
   if (_fs->exists(BLACKLIST_FILENAME)) {
   #if defined(RP2040_PLATFORM)
@@ -23,6 +24,9 @@ void Blacklist::load(FILESYSTEM* fs) {
     File file = _fs->open(BLACKLIST_FILENAME);
   #endif
     if (file) {
+      if (file.read((uint8_t *)&mode, 1) == 1 && mode > BLACKLIST_MODE_INDIRECT) {
+        mode = BLACKLIST_MODE_OFF;  // corrupt/unknown value, fall back to safe default
+      }
       while (num_entries < MAX_BLACKLIST) {
         BlacklistEntry e;
         bool success = (file.read((uint8_t *)&e.len, 1) == 1);
@@ -40,14 +44,21 @@ void Blacklist::save(FILESYSTEM* fs) {
   _fs = fs;
   File file = openWrite(_fs, BLACKLIST_FILENAME);
   if (file) {
-    for (int i = 0; i < num_entries; i++) {
+    bool success = (file.write((uint8_t *)&mode, 1) == 1);
+    for (int i = 0; success && i < num_entries; i++) {
       auto e = &entries[i];
-      bool success = (file.write((uint8_t *)&e->len, 1) == 1);
+      success = (file.write((uint8_t *)&e->len, 1) == 1);
       success = success && (file.write(e->prefix, 3) == 3);
       if (!success) break;  // write failed
     }
     file.close();
   }
+}
+
+bool Blacklist::setMode(uint8_t m) {
+  if (m > BLACKLIST_MODE_INDIRECT) return false;
+  mode = m;
+  return true;
 }
 
 int Blacklist::indexOf(const uint8_t* prefix, uint8_t len) const {
