@@ -27,6 +27,7 @@
 #include <helpers/ArduinoHelpers.h>
 #include <helpers/ClientACL.h>
 #include <helpers/CommonCLI.h>
+#include "Blacklist.h"
 #include <helpers/IdentityStore.h>
 #include <helpers/SimpleMeshTables.h>
 #include <helpers/StaticPoolPacketManager.h>
@@ -88,6 +89,7 @@ class MyMesh : public mesh::Mesh, public CommonCLICallbacks {
   bool _logging;
   NodePrefs _prefs;
   ClientACL  acl;
+  Blacklist blacklist;
   CommonCLI _cli;
   uint8_t reply_data[MAX_PACKET_PAYLOAD];
   uint8_t reply_path[MAX_PATH_SIZE];
@@ -129,6 +131,7 @@ class MyMesh : public mesh::Mesh, public CommonCLICallbacks {
 
   File openAppend(const char* fname);
   bool isLooped(const mesh::Packet* packet, const uint8_t max_counters[]);
+  bool isBlacklisted(const mesh::Packet* packet);
 
 protected:
   float getAirtimeBudgetFactor() const override {
