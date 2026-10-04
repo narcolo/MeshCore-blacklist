@@ -50,4 +50,9 @@ public:
 
   // true if `hash` (hash_size bytes, as read from a packet path entry) matches any stored entry
   bool matches(const uint8_t* hash, uint8_t hash_size) const;
+
+  // Handles "add <hex>", "remove <hex>", "list", "clear", "mode", "mode <off|direct|indirect>".
+  // `sub` is the command text after "blacklist" and any leading space has been stripped.
+  // Writes the response into `reply` and persists any mutation itself.
+  void handleCommand(const char* sub, char* reply);
 };

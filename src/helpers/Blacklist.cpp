@@ -108,3 +108,79 @@ bool Blacklist::matches(const uint8_t* hash, uint8_t hash_size) const {
   }
   return false;
 }
+
+static bool isValidHexPrefix(const char* hex, int len) {
+  if (len != 2 && len != 4 && len != 6) return false;
+  for (int i = 0; i < len; i++) {
+    if (!mesh::Utils::isHexChar(hex[i])) return false;
+  }
+  return true;
+}
+
+void Blacklist::handleCommand(const char* sub, char* reply) {
+  if (memcmp(sub, "add ", 4) == 0) {
+    const char* hex = sub + 4;
+    int hex_len = strlen(hex);
+    uint8_t prefix[3];
+    if (!isValidHexPrefix(hex, hex_len) || !mesh::Utils::fromHex(prefix, hex_len / 2, hex)) {
+      strcpy(reply, "Err - prefix must be 2/4/6 hex chars (1-3 bytes)");
+    } else if (add(prefix, hex_len / 2)) {
+      save(_fs);
+      strcpy(reply, "OK");
+    } else {
+      strcpy(reply, "Err - blacklist full");
+    }
+  } else if (memcmp(sub, "remove ", 7) == 0) {
+    const char* hex = sub + 7;
+    int hex_len = strlen(hex);
+    uint8_t prefix[3];
+    if (!isValidHexPrefix(hex, hex_len) || !mesh::Utils::fromHex(prefix, hex_len / 2, hex)) {
+      strcpy(reply, "Err - prefix must be 2/4/6 hex chars (1-3 bytes)");
+    } else if (remove(prefix, hex_len / 2)) {
+      save(_fs);
+      strcpy(reply, "OK");
+    } else {
+      strcpy(reply, "Err - not found");
+    }
+  } else if (strcmp(sub, "list") == 0) {
+    char* dp = reply;
+    for (int i = 0; i < num_entries && dp - reply < 134; i++) {
+      auto e = &entries[i];
+      if (i > 0) *dp++ = ' ';
+      char hex[8];
+      mesh::Utils::toHex(hex, e->prefix, e->len);
+      sprintf(dp, "%d:%s", (int)e->len, hex);
+      while (*dp) dp++;  // find end of string
+    }
+    if (dp == reply) {  // no entries, need non-empty response
+      strcpy(dp, "-none-");
+      dp += 6;
+    }
+    *dp = 0;
+  } else if (strcmp(sub, "clear") == 0) {
+    clear();
+    strcpy(reply, "OK");
+  } else if (strcmp(sub, "mode") == 0) {
+    strcpy(reply, mode == BLACKLIST_MODE_OFF ? "off" : (mode == BLACKLIST_MODE_DIRECT ? "direct" : "indirect"));
+  } else if (memcmp(sub, "mode ", 5) == 0) {
+    const char* arg = sub + 5;
+    uint8_t m;
+    if (strcmp(arg, "off") == 0) {
+      m = BLACKLIST_MODE_OFF;
+    } else if (strcmp(arg, "direct") == 0) {
+      m = BLACKLIST_MODE_DIRECT;
+    } else if (strcmp(arg, "indirect") == 0) {
+      m = BLACKLIST_MODE_INDIRECT;
+    } else {
+      m = 0xFF;
+    }
+    if (m == 0xFF || !setMode(m)) {
+      strcpy(reply, "Err - must be: off, direct, or indirect");
+    } else {
+      save(_fs);
+      strcpy(reply, "OK");
+    }
+  } else {
+    strcpy(reply, "Err - bad params");
+  }
+}

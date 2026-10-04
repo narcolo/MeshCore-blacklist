@@ -28,7 +28,7 @@
 #include <helpers/ArduinoHelpers.h>
 #include <helpers/ClientACL.h>
 #include <helpers/CommonCLI.h>
-#include "Blacklist.h"
+#include <helpers/Blacklist.h>
 #include <helpers/IdentityStore.h>
 #include <helpers/SimpleMeshTables.h>
 #include <helpers/StaticPoolPacketManager.h>
