@@ -413,6 +413,27 @@ bool MyMesh::isLooped(const mesh::Packet* packet, const uint8_t max_counters[]) 
   return n >= max_counters[hash_size];
 }
 
+bool MyMesh::isBlacklisted(const mesh::Packet* packet) {
+  uint8_t hash_size = packet->getPathHashSize();
+  uint8_t hash_count = packet->getPathHashCount();
+  if (hash_count == 0) return false;  // no hops yet, nothing to check
+
+  if (_prefs.blacklist_mode == BLACKLIST_MODE_DIRECT) {
+    // only the most recent hop (the one that just relayed this to us)
+    const uint8_t* last_hop = packet->path + (hash_count - 1) * hash_size;
+    return blacklist.matches(last_hop, hash_size);
+  }
+
+  // INDIRECT: walk the whole path, like isLooped() does
+  const uint8_t* path = packet->path;
+  while (hash_count > 0) {
+    if (blacklist.matches(path, hash_size)) return true;
+    hash_count--;
+    path += hash_size;
+  }
+  return false;
+}
+
 void MyMesh::sendFloodReply(mesh::Packet* packet, unsigned long delay_millis, uint8_t path_hash_size) {
   if (recv_pkt_region && !recv_pkt_region->isWildcard()) {  // if _request_ packet scope is known, send reply with same scope
     TransportKey scope;
@@ -446,6 +467,10 @@ bool MyMesh::allowPacketForward(const mesh::Packet *packet) {
       MESH_DEBUG_PRINTLN("allowPacketForward: FLOOD packet loop detected!");
       return false;
     }
+  }
+  if (packet->isRouteFlood() && _prefs.blacklist_mode != BLACKLIST_MODE_OFF && isBlacklisted(packet)) {
+    MESH_DEBUG_PRINTLN("allowPacketForward: packet dropped, blacklisted repeater in path (mode=%d)", (int)_prefs.blacklist_mode);
+    return false;
   }
   return true;
 }
@@ -924,6 +949,7 @@ void MyMesh::begin(FILESYSTEM *fs) {
   // load persisted prefs
   _cli.loadPrefs(_fs);
   acl.load(_fs, self_id);
+  blacklist.load(_fs);
   // TODO: key_store.begin();
   region_map.load(_fs);
 
@@ -1165,6 +1191,14 @@ void MyMesh::clearStats() {
   ((SimpleMeshTables *)getTables())->resetStats();
 }
 
+static bool isValidHexPrefix(const char* hex, int len) {
+  if (len != 2 && len != 4 && len != 6) return false;
+  for (int i = 0; i < len; i++) {
+    if (!mesh::Utils::isHexChar(hex[i])) return false;
+  }
+  return true;
+}
+
 void MyMesh::handleCommand(uint32_t sender_timestamp, char *command, char *reply) {
   if (region_load_active) {
     if (StrHelper::isBlank(command)) {  // empty/blank line, signal to terminate 'load' operation
@@ -1251,6 +1285,48 @@ void MyMesh::handleCommand(uint32_t sender_timestamp, char *command, char *reply
       sendNodeDiscoverReq();
       strcpy(reply, "OK - Discover sent");
     }
+  } else if (memcmp(command, "blacklist add ", 14) == 0) {
+    char* hex = &command[14];
+    int hex_len = strlen(hex);
+    uint8_t prefix[3];
+    if (!isValidHexPrefix(hex, hex_len) || !mesh::Utils::fromHex(prefix, hex_len / 2, hex)) {
+      strcpy(reply, "Err - prefix must be 2/4/6 hex chars (1-3 bytes)");
+    } else if (blacklist.add(prefix, hex_len / 2)) {
+      blacklist.save(_fs);
+      strcpy(reply, "OK");
+    } else {
+      strcpy(reply, "Err - blacklist full");
+    }
+  } else if (memcmp(command, "blacklist remove ", 17) == 0) {
+    char* hex = &command[17];
+    int hex_len = strlen(hex);
+    uint8_t prefix[3];
+    if (!isValidHexPrefix(hex, hex_len) || !mesh::Utils::fromHex(prefix, hex_len / 2, hex)) {
+      strcpy(reply, "Err - prefix must be 2/4/6 hex chars (1-3 bytes)");
+    } else if (blacklist.remove(prefix, hex_len / 2)) {
+      blacklist.save(_fs);
+      strcpy(reply, "OK");
+    } else {
+      strcpy(reply, "Err - not found");
+    }
+  } else if (strcmp(command, "blacklist list") == 0) {
+    char* dp = reply;
+    for (int i = 0; i < blacklist.getCount() && dp - reply < 134; i++) {
+      auto e = blacklist.getEntry(i);
+      if (i > 0) *dp++ = ' ';
+      char hex[8];
+      mesh::Utils::toHex(hex, e->prefix, e->len);
+      sprintf(dp, "%d:%s", (int)e->len, hex);
+      while (*dp) dp++;  // find end of string
+    }
+    if (dp == reply) {  // no entries, need non-empty response
+      strcpy(dp, "-none-");
+      dp += 6;
+    }
+    *dp = 0;
+  } else if (strcmp(command, "blacklist clear") == 0) {
+    blacklist.clear();
+    strcpy(reply, "OK");
   } else{
     _cli.handleCommand(sender_timestamp, command, reply);  // common CLI commands
   }

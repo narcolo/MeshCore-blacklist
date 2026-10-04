@@ -88,9 +88,11 @@ void CommonCLI::loadPrefsInt(FILESYSTEM* fs, const char* filename) {
     file.read((uint8_t *)&_prefs->adc_multiplier, sizeof(_prefs->adc_multiplier));                 // 166
     file.read((uint8_t *)_prefs->owner_info, sizeof(_prefs->owner_info));                          // 170
     file.read((uint8_t *)&_prefs->rx_boosted_gain, sizeof(_prefs->rx_boosted_gain));              // 290
-    // next: 291
+    file.read((uint8_t *)&_prefs->blacklist_mode, sizeof(_prefs->blacklist_mode));                // 291
+    // next: 292
 
     // sanitise bad pref values
+    _prefs->blacklist_mode = constrain(_prefs->blacklist_mode, 0, 2);
     _prefs->rx_delay_base = constrain(_prefs->rx_delay_base, 0, 20.0f);
     _prefs->tx_delay_factor = constrain(_prefs->tx_delay_factor, 0, 2.0f);
     _prefs->direct_tx_delay_factor = constrain(_prefs->direct_tx_delay_factor, 0, 2.0f);
@@ -179,7 +181,8 @@ void CommonCLI::savePrefs(FILESYSTEM* fs) {
     file.write((uint8_t *)&_prefs->adc_multiplier, sizeof(_prefs->adc_multiplier));                 // 166
     file.write((uint8_t *)_prefs->owner_info, sizeof(_prefs->owner_info));                          // 170
     file.write((uint8_t *)&_prefs->rx_boosted_gain, sizeof(_prefs->rx_boosted_gain));              // 290
-    // next: 291
+    file.write((uint8_t *)&_prefs->blacklist_mode, sizeof(_prefs->blacklist_mode));                // 291
+    // next: 292
 
     file.close();
   }
@@ -654,6 +657,24 @@ void CommonCLI::handleSetCmd(uint32_t sender_timestamp, char* command, char* rep
       savePrefs();
       strcpy(reply, "OK");
     }
+  } else if (memcmp(config, "blacklist.mode ", 15) == 0) {
+    config += 15;
+    uint8_t mode;
+    if (memcmp(config, "off", 3) == 0) {
+      mode = BLACKLIST_MODE_OFF;
+    } else if (memcmp(config, "direct", 6) == 0) {
+      mode = BLACKLIST_MODE_DIRECT;
+    } else if (memcmp(config, "indirect", 8) == 0) {
+      mode = BLACKLIST_MODE_INDIRECT;
+    } else {
+      mode = 0xFF;
+      strcpy(reply, "Error, must be: off, direct, or indirect");
+    }
+    if (mode != 0xFF) {
+      _prefs->blacklist_mode = mode;
+      savePrefs();
+      strcpy(reply, "OK");
+    }
   } else if (memcmp(config, "tx ", 3) == 0) {
     _prefs->tx_power_dbm = atoi(&config[3]);
     savePrefs();
@@ -803,6 +824,14 @@ void CommonCLI::handleGetCmd(uint32_t sender_timestamp, char* command, char* rep
       strcpy(reply, "> moderate");
     } else {
       strcpy(reply, "> strict");
+    }
+  } else if (memcmp(config, "blacklist.mode", 14) == 0) {
+    if (_prefs->blacklist_mode == BLACKLIST_MODE_OFF) {
+      strcpy(reply, "> off");
+    } else if (_prefs->blacklist_mode == BLACKLIST_MODE_DIRECT) {
+      strcpy(reply, "> direct");
+    } else {
+      strcpy(reply, "> indirect");
     }
   } else if (memcmp(config, "tx", 2) == 0 && (config[2] == 0 || config[2] == ' ')) {
     sprintf(reply, "> %d", (int32_t) _prefs->tx_power_dbm);
