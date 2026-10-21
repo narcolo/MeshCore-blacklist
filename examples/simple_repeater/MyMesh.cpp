@@ -410,6 +410,27 @@ bool MyMesh::isLooped(const mesh::Packet* packet, const uint8_t max_counters[]) 
   return n >= max_counters[hash_size];
 }
 
+bool MyMesh::isBlacklisted(const mesh::Packet* packet) {
+  uint8_t hash_size = packet->getPathHashSize();
+  uint8_t hash_count = packet->getPathHashCount();
+  if (hash_count == 0) return false;  // no hops yet, nothing to check
+
+  if (blacklist.getMode() == BLACKLIST_MODE_DIRECT) {
+    // only the most recent hop (the one that just relayed this to us)
+    const uint8_t* last_hop = packet->path + (hash_count - 1) * hash_size;
+    return blacklist.matches(last_hop, hash_size);
+  }
+
+  // INDIRECT: walk the whole path, like isLooped() does
+  const uint8_t* path = packet->path;
+  while (hash_count > 0) {
+    if (blacklist.matches(path, hash_size)) return true;
+    hash_count--;
+    path += hash_size;
+  }
+  return false;
+}
+
 void MyMesh::sendFloodReply(mesh::Packet* packet, unsigned long delay_millis, uint8_t path_hash_size) {
   TransportKey req_scope;
   bool is_wildcard = recv_pkt_region != NULL && recv_pkt_region->isWildcard();
@@ -454,6 +475,10 @@ bool MyMesh::allowPacketForward(const mesh::Packet *packet) {
       MESH_DEBUG_PRINTLN("allowPacketForward: FLOOD packet loop detected!");
       return false;
     }
+  }
+  if (packet->isRouteFlood() && blacklist.getMode() != BLACKLIST_MODE_OFF && isBlacklisted(packet)) {
+    MESH_DEBUG_PRINTLN("allowPacketForward: packet dropped, blacklisted repeater in path (mode=%d)", (int)blacklist.getMode());
+    return false;
   }
   return true;
 }
@@ -948,6 +973,7 @@ void MyMesh::begin(FILESYSTEM *fs) {
   // load persisted prefs
   _cli.loadPrefs(_fs);
   acl.load(_fs, self_id);
+  blacklist.load(_fs);
   // TODO: key_store.begin();
   region_map.load(_fs);
 
@@ -1281,6 +1307,10 @@ void MyMesh::handleCommand(uint32_t sender_timestamp, char *command, char *reply
       sendNodeDiscoverReq();
       strcpy(reply, "OK - Discover sent");
     }
+  } else if (memcmp(command, "blacklist", 9) == 0 && (command[9] == 0 || command[9] == ' ')) {
+    const char* sub = command + 9;
+    while (*sub == ' ') sub++;
+    blacklist.handleCommand(sub, reply);
   } else{
     _cli.handleCommand(sender_timestamp, command, reply);  // common CLI commands
   }
