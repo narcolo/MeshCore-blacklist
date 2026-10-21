@@ -39,6 +39,34 @@ public:
     std::memcpy(dest, src + CIPHER_MAC_SIZE, out_len);
     return out_len;
   }
+
+  static void toHex(char* dest, const uint8_t* src, size_t len) {
+    static const char hex_chars[] = "0123456789ABCDEF";
+    while (len > 0) {
+      uint8_t b = *src++;
+      *dest++ = hex_chars[b >> 4];
+      *dest++ = hex_chars[b & 0x0F];
+      len--;
+    }
+    *dest = 0;
+  }
+
+  static bool isHexChar(char c) {
+    return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+  }
+
+  static bool fromHex(uint8_t* dest, int dest_size, const char* src_hex) {
+    if ((int)std::strlen(src_hex) != dest_size * 2) return false;
+    for (int i = 0; i < dest_size; i++) {
+      auto nibble = [](char c) -> uint8_t {
+        if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+        if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+        return c - '0';
+      };
+      dest[i] = (nibble(src_hex[i * 2]) << 4) | nibble(src_hex[i * 2 + 1]);
+    }
+    return true;
+  }
 };
 
 }

@@ -30,6 +30,7 @@ class Blacklist {
 
 public:
   Blacklist() {
+    _fs = NULL;
     mode = BLACKLIST_MODE_OFF;
     memset(entries, 0, sizeof(entries));
     num_entries = 0;
